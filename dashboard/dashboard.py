@@ -84,8 +84,8 @@ total_power = latest_readings["power_w"].sum()
 total_rigs = latest_readings.shape[0]
 
 # Update total hashrate, total power, and total active rigs values
-header1.header(f"{int(total_hashrate)} MH")
-header2.header(f"{int(total_power)} W")
+header1.header(f"{format(int(total_hashrate), ',')} MH")
+header2.header(f"{format(int(total_power), ',')} W")
 header3.header(f"{total_rigs} ({time_range})")
 
 # Save selected time range and interval back to config
@@ -134,6 +134,8 @@ st.table(rigs[["hashrate_mh", "power_w", "last_update"]])
 
 st.markdown("---")
 
+# ...
+
 # Display GPU information for each unique rig
 st.subheader("Rigs GPU Information")
 
@@ -150,16 +152,23 @@ for i, rig in enumerate(unique_rigs):
         # Filter data for the current rig
         rig_data = df[df["name"] == rig]
 
-        # Extract the list of GPUs for each entry, combine them ensuring uniqueness
-        all_gpus = set()
+        # Count the occurrences of each GPU
+        gpu_counts = {}
         for gpus_str in rig_data["gpus"]:
             try:
                 # Convert the JSON string representation of the list into an actual list
                 gpus_list = json.loads(gpus_str)
-                all_gpus.update(gpus_list)
+                for gpu in gpus_list:
+                    gpu_counts[gpu] = gpu_counts.get(gpu, 0) + 1
             except Exception as e:
                 print(f"Error: {e}, gpus_str: {gpus_str}")
 
+        # Convert GPU counts into a DataFrame
+        gpu_counts_df = pd.DataFrame(gpu_counts.items(), columns=["GPUs", "Count"])
+
+        # Set the GPUs column as the index to remove ordinal numbers
+        gpu_counts_df = gpu_counts_df.set_index("GPUs")
+
         # Display the GPUs for the current rig in a table
         column.subheader(f"{rig}")
-        column.table(pd.DataFrame(list(all_gpus), columns=["GPUs"]))
+        column.table(gpu_counts_df)

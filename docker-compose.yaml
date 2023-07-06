@@ -1,0 +1,23 @@
+version: "3.8"
+services:
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data  # Mounts the data directory to /app/data in the container
+    environment:
+      CONFIG_PATH: /app/data/config.json  # Points to config.json in the data directory
+
+  dashboard:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./data:/app/data  # Mounts the data directory to /app/data in the container
+    depends_on:
+      - api

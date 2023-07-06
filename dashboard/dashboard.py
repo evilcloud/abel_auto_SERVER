@@ -58,8 +58,7 @@ header1.title("Hashrate")
 header2.title("Power")
 header3.title("Rigs")
 
-
-# Sliders for time_range and time_interval
+# Select boxes for time_range and time_interval
 time_controls = st.columns(2)
 time_range = time_controls[0].selectbox(
     "Rig Statistics Range",
@@ -73,7 +72,6 @@ time_interval = time_controls[1].selectbox(
     index=config["dashboard_settings"]["data_intervals"].index(config.get("prev_time_interval", "1h"))
 )
 
-
 # Convert time intervals to hours for further calculations
 time_range_hours = interval_to_hours(time_range)
 time_interval_hours = interval_to_hours(time_interval)
@@ -86,9 +84,16 @@ total_power = latest_readings["power_w"].sum()
 total_rigs = latest_readings.shape[0]
 
 # Update total hashrate, total power, and total active rigs values
-header1.subheader(f"{int(total_hashrate)} MH")
-header2.subheader(f"{int(total_power)} W")
-header3.subheader(f"{total_rigs} ({time_range})")
+header1.header(f"{int(total_hashrate)} MH")
+header2.header(f"{int(total_power)} W")
+header3.header(f"{total_rigs} ({time_range})")
+
+# Save selected time range and interval back to config
+config["prev_time_range"] = time_range
+config["prev_time_interval"] = time_interval
+
+with open('/app/data/config.json', 'w') as config_file:
+    json.dump(config, config_file)
 
 # Calculate historic hashrate and power consumption
 # Group by the selected time interval for finer granularity
@@ -100,16 +105,17 @@ else:
     historic_hashrate = df.groupby("created_at")["hashrate_mh"].sum()
     historic_power = df.groupby("created_at")["power_w"].sum()
 
+# Combine historic hashrate and power consumption into a single DataFrame
+historic_data = pd.DataFrame({
+    "hashrate_mh": historic_hashrate,
+    "power_w": historic_power
+})
+
 st.markdown("---")
 
-# Plot line charts for historic hashrate and power consumption side by side
+# Plot line charts for historic hashrate and power consumption in a single chart
 st.subheader("Historic Hashrate and Power Consumption")
-col1, col2 = st.columns(2)
-with col1:
-    st.line_chart(historic_hashrate, use_container_width=True, height=200)
-
-with col2:
-    st.line_chart(historic_power, use_container_width=True, height=200)
+st.line_chart(historic_data, use_container_width=True, height=200)
 
 # Group by server_name to get rig data and calculate last update time
 rigs = df.groupby("name").agg({

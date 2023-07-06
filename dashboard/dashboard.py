@@ -3,8 +3,8 @@ import requests
 import pandas as pd
 import json
 import humanize
+import time
 from datetime import datetime, timedelta
-import ast
 
 
 # Function to convert time intervals to hours
@@ -29,43 +29,54 @@ with open('/app/data/config.json') as config_file:
 api_url = config["api_url"]
 response = requests.get(api_url)
 
+# Load data into DataFrame
+if response.status_code == 200:
+    data = response.json()
+    if not data:
+        # Display a message if no data
+        st.error("No API data available.")
+        st.stop()
+    else:
+        # Columns according to the API response
+        columns = ["id", "name", "gpus", "hashrate_mh", "power_w", "created_at"]
+        df = pd.DataFrame(data, columns=columns)
+        df["created_at"] = pd.to_datetime(df["created_at"])  # Convert to datetime object
+else:
+    st.error("Failed to fetch data from the API")
+    st.stop()
+
+
 # Function to format time delta
 def format_time_delta(delta):
     total_seconds = int(delta.total_seconds())
     return humanize.naturaldelta(total_seconds)
 
-# Load data into DataFrame
-if response.status_code == 200:
-    data = response.json()
-    # Columns according to the API response
-    columns = ["id", "name", "gpus", "hashrate_mh", "power_w", "created_at"]
-    df = pd.DataFrame(data, columns=columns)
-    df["created_at"] = pd.to_datetime(df["created_at"])  # Convert to datetime object
-else:
-    st.error("Failed to fetch data from the API")
-    df = pd.DataFrame()
 
-# Get previous state or use default from config.json
-prev_time_interval = config.get("prev_time_interval", config["dashboard_settings"]["data_intervals"][0])
-prev_time_range = config.get("prev_time_range", "1h")
+# Display total hashrate, total power, and total active rigs in three columns
+header1, header2, header3 = st.columns(3)
+header1.title("Hashrate")
+header2.title("Power")
+header3.title("Rigs")
 
-# Slider for time_interval
-time_interval = st.selectbox(
-    "Historic Data Interval",
-    config["dashboard_settings"]["data_intervals"],
-    index=config["dashboard_settings"]["data_intervals"].index(prev_time_interval)
-)
 
-# Slider for time_range
-time_range = st.selectbox(
+# Sliders for time_range and time_interval
+time_controls = st.columns(2)
+time_range = time_controls[0].selectbox(
     "Rig Statistics Range",
     config["dashboard_settings"]["data_intervals"],
-    index=config["dashboard_settings"]["data_intervals"].index(prev_time_range)
+    index=config["dashboard_settings"]["data_intervals"].index(config.get("prev_time_range", "1h"))
 )
 
+time_interval = time_controls[1].selectbox(
+    "Historic Data Interval",
+    config["dashboard_settings"]["data_intervals"],
+    index=config["dashboard_settings"]["data_intervals"].index(config.get("prev_time_interval", "1h"))
+)
+
+
 # Convert time intervals to hours for further calculations
-time_interval_hours = interval_to_hours(time_interval)
 time_range_hours = interval_to_hours(time_range)
+time_interval_hours = interval_to_hours(time_interval)
 
 # Calculate total hashrate and total power from the latest reading of each rig within the selected time range
 cutoff_time = datetime.now() if time_range == 'all' else datetime.now() - timedelta(hours=time_range_hours)
@@ -74,14 +85,10 @@ total_hashrate = latest_readings["hashrate_mh"].sum()
 total_power = latest_readings["power_w"].sum()
 total_rigs = latest_readings.shape[0]
 
-# Display total hashrate, total power, and total active rigs in three columns
-header1, header2, header3 = st.columns(3)
-header1.title("Hashrate")
+# Update total hashrate, total power, and total active rigs values
 header1.subheader(f"{int(total_hashrate)} MH")
-header2.title("Power")
 header2.subheader(f"{int(total_power)} W")
-header3.title(f"Rigs ({time_range})")
-header3.subheader(f"{total_rigs}")
+header3.subheader(f"{total_rigs} ({time_range})")
 
 # Calculate historic hashrate and power consumption
 # Group by the selected time interval for finer granularity
@@ -93,8 +100,7 @@ else:
     historic_hashrate = df.groupby("created_at")["hashrate_mh"].sum()
     historic_power = df.groupby("created_at")["power_w"].sum()
 
-st.divider()
-
+st.markdown("---")
 
 # Plot line charts for historic hashrate and power consumption side by side
 st.subheader("Historic Hashrate and Power Consumption")
@@ -120,9 +126,7 @@ rigs["hashrate_mh"] = rigs["hashrate_mh"].astype(int)
 rigs["power_w"] = rigs["power_w"].astype(int)
 st.table(rigs[["hashrate_mh", "power_w", "last_update"]])
 
-
-st.divider()
-
+st.markdown("---")
 
 # Display GPU information for each unique rig
 st.subheader("Rigs GPU Information")

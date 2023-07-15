@@ -45,6 +45,16 @@ else:
     st.error("Failed to fetch data from the API")
     st.stop()
 
+# Fetch the balance from the API
+balance_response = requests.get(f"{api_url}/balance")
+
+# Load balance into variable
+if balance_response.status_code == 200:
+    balance = int(balance_response.json())
+else:
+    st.error("Failed to fetch balance data from the API")
+    balance = None
+
 
 # Function to format time delta
 def format_time_delta(delta):
@@ -52,11 +62,12 @@ def format_time_delta(delta):
     return humanize.naturaldelta(total_seconds)
 
 
-# Display total hashrate, total power, and total active rigs in three columns
-header1, header2, header3 = st.columns(3)
+# Display total hashrate, total power, total active rigs and balance in four columns
+header1, header2, header3, header4 = st.columns(4)
 header1.title("Hashrate")
 header2.title("Power")
 header3.title("Rigs")
+header4.title("Balance")  # Add a new column for balance
 
 # Select boxes for time_range and time_interval
 time_controls = st.columns(2)
@@ -83,10 +94,11 @@ total_hashrate = latest_readings["hashrate_mh"].sum()
 total_power = latest_readings["power_w"].sum()
 total_rigs = latest_readings.shape[0]
 
-# Update total hashrate, total power, and total active rigs values
+# Update total hashrate, total power, total active rigs and balance values
 header1.header(f"{format(int(total_hashrate), ',')} MH")
 header2.header(f"{format(int(total_power), ',')} W")
 header3.header(f"{total_rigs} ({time_range})")
+header4.header(f"{format(balance, ',')}")  # Display the balance
 
 # Save selected time range and interval back to config
 config["prev_time_range"] = time_range
@@ -133,8 +145,6 @@ rigs["power_w"] = rigs["power_w"].astype(int)
 st.table(rigs[["hashrate_mh", "power_w", "last_update"]])
 
 st.markdown("---")
-
-# ...
 
 # Display GPU information for each unique rig
 st.subheader("Rigs GPU Information")

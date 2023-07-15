@@ -1,9 +1,10 @@
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from datetime import datetime
-import sqlite3
 import os
 import json
+from sqlalchemy import create_engine, Table, MetaData, Column, Integer, String, DateTime, Float, select
+from typing import Optional, List
 
 app = FastAPI()
 
@@ -15,86 +16,79 @@ with open(CONFIG_PATH) as config_file:
 
 DATABASE_PATH = os.path.join("data", config["server_settings"]["database_name"])
 LOGFILE_PATH = os.path.join("data", config["server_settings"]["logfile_name"])
-
+MAX_TIMEOUT = 600
 
 class Report(BaseModel):
     server_name: str
-    gpus: list[str] = None
-    hashrate_mh: float = None
-    power_w: float = None
+    gpus: Optional[List[str]] = Field(default=None)
+    hashrate_mh: Optional[float] = Field(default=None)
+    power_w: Optional[float] = Field(default=None)
 
+class Balance(BaseModel):
+    balance: float
+    timestamp: Optional[datetime] = Field(default=None)
 
-def create_rig_table():
-    conn = sqlite3.connect(DATABASE_PATH)
-    c = conn.cursor()
-    c.execute(
-        """
-        CREATE TABLE IF NOT EXISTS rig (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT,
-            gpus TEXT,
-            hashrate_mh INTEGER,
-            power_w INTEGER,
-            created_at TIMESTAMP
-        )
-        """
-    )
-    conn.commit()
-    conn.close()
+# create database engine
+engine = create_engine(f'sqlite:///{DATABASE_PATH}', echo = True)
 
+metadata = MetaData()
 
-def log_transaction(message):
-    with open(LOGFILE_PATH, "a") as file:
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        file.write(f"{timestamp}: {message}\n")
+rigs = Table(
+    'rig', metadata,
+    Column('id', Integer, primary_key=True),
+    Column('name', String),
+    Column('num_gpus', Integer),
+    Column('gpu_names', String),
+    Column('hashrate_mh', Float),
+    Column('power_w', Float),
+    Column('updated_at', DateTime),
+)
 
+balances = Table(
+    'balance', metadata,
+    Column('id', Integer, primary_key=True),
+    Column('balance', Float),
+    Column('timestamp', DateTime),
+)
+
+# create tables if they do not exist
+with engine.connect() as connection:
+    metadata.create_all(connection)
 
 @app.post("/api/report")
-def report(report: Report):
-    rig_name = report.server_name
-    gpus = json.dumps(report.gpus) if report.gpus else ''
-
-    hashrate = 0
-    power = 0
-
-    try:
-        hashrate = int(report.hashrate_mh)
-    except (ValueError, TypeError):
-        hashrate = 0
-
-    try:
-        power = int(report.power_w)
-    except (ValueError, TypeError):
-        power = 0
-
-    if not rig_name:
-        log_transaction("Invalid report: Missing rig name")
-        raise HTTPException(status_code=400, detail="Rig name is required")
-
-    create_rig_table()
-    conn = sqlite3.connect(DATABASE_PATH)
-    c = conn.cursor()
-    c.execute(
-        """
-        INSERT INTO rig (name, gpus, hashrate_mh, power_w, created_at)
-        VALUES (?, ?, ?, ?, ?)
-        """,
-        (rig_name, gpus, hashrate, power, datetime.now()),
-    )
-    conn.commit()
-    conn.close()
-
-    log_transaction("Data received")
-
+async def report(report: Report):
+    with engine.connect() as connection:
+        ins = rigs.insert().values(
+            name=report.server_name,
+            num_gpus=len(report.gpus) if report.gpus else 0,
+            gpu_names=','.join(report.gpus) if report.gpus else '',
+            hashrate_mh=report.hashrate_mh,
+            power_w=report.power_w,
+            updated_at=datetime.now()
+        )
+        result = connection.execute(ins)
     return {"message": "Data received"}
 
-
 @app.get("/api/report")
-def get_report():
-    conn = sqlite3.connect(DATABASE_PATH)
-    c = conn.cursor()
-    c.execute("SELECT * FROM rig")
-    rows = c.fetchall()
-    conn.close()
+async def get_report():
+    with engine.connect() as connection:
+        s = select(rigs)
+        result = connection.execute(s)
+        data = [dict(row) for row in result]
+    return data
+@app.post("/api/balance")
+async def submit_balance(balance: Balance):
+    with engine.connect() as connection:
+        ins = balances.insert().values(
+            balance=balance.balance,
+            timestamp=balance.timestamp or datetime.now()
+        )
+        result = connection.execute(ins)
+    return {"message": "Balance received"}
 
-    return rows
+@app.get("/api/balance")
+async def get_balance():
+    with engine.connect() as connection:
+        s = balances.select()
+        result = connection.execute(s)
+    return [dict(row) for row in result]

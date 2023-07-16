@@ -162,20 +162,23 @@ st.markdown("---")
 st.subheader("Historic Hashrate and Power Consumption")
 st.line_chart(historic_data, use_container_width=True, height=200)
 
-# Group by server_name to get rig data and calculate last update time
-rigs = df.groupby("name").agg({
-    "hashrate_mh": "last",
-    "power_w": "last",
-    "created_at": "max"
-})
+if not df.empty:
+    # Group by server_name to get rig data and calculate last update time
+    rigs = df.groupby("name").agg({
+        "hashrate_mh": "last",
+        "power_w": "last",
+        "created_at": "max"
+    })
 
-rigs["last_update"] = (datetime.now() - rigs["created_at"]).apply(format_time_delta)
+    rigs["last_update"] = (datetime.now() - rigs["created_at"]).apply(format_time_delta)
 
-# Display rig data in a table
-st.subheader("Rigs Overview")
-rigs["hashrate_mh"] = rigs["hashrate_mh"].astype(int)
-rigs["power_w"] = rigs["power_w"].astype(int)
-st.table(rigs[["hashrate_mh", "power_w", "last_update"]])
+    # Display rig data in a table
+    st.subheader("Rigs Overview")
+    rigs["hashrate_mh"] = rigs["hashrate_mh"].astype(int)
+    rigs["power_w"] = rigs["power_w"].astype(int)
+    st.table(rigs[["hashrate_mh", "power_w", "last_update"]])
+else:
+    st.subheader("No rigs data available.")
 
 st.markdown("---")
 

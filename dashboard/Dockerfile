@@ -10,7 +10,7 @@ COPY requirements.txt .
 # Install the dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the dashboard.py file
+# Copy the dashboard.py and config.json file
 COPY dashboard.py .
 
 # Expose the port

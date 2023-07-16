@@ -1,100 +1,60 @@
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from datetime import datetime
-import sqlite3
-import os
+from fastapi import FastAPI
 import json
+from datetime import datetime
+
+from process.create_tables import create_tables
+from process.insert_report import insert_report
+from process.get_report import get_reports
+from process.insert_balance import insert_balance, insert_balance_with_timestamp
+from process.get_balance import get_balance
+from process.models import Report, Balance, BalanceWithTimestamp
 
 app = FastAPI()
 
-CONFIG_PATH = os.environ.get("CONFIG_PATH", "data/config.json")
+CONFIG_PATH = "data/config.json"
 
-# Load the configuration file
 with open(CONFIG_PATH) as config_file:
     config = json.load(config_file)
 
-DATABASE_PATH = os.path.join("data", config["server_settings"]["database_name"])
-LOGFILE_PATH = os.path.join("data", config["server_settings"]["logfile_name"])
+database_name = config["server_settings"]["database_name"]
 
 
-class Report(BaseModel):
-    server_name: str
-    gpus: list[str] = None
-    hashrate_mh: float = None
-    power_w: float = None
-
-
-def create_rig_table():
-    conn = sqlite3.connect(DATABASE_PATH)
-    c = conn.cursor()
-    c.execute(
-        """
-        CREATE TABLE IF NOT EXISTS rig (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT,
-            gpus TEXT,
-            hashrate_mh INTEGER,
-            power_w INTEGER,
-            created_at TIMESTAMP
-        )
-        """
-    )
-    conn.commit()
-    conn.close()
-
-
-def log_transaction(message):
-    with open(LOGFILE_PATH, "a") as file:
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        file.write(f"{timestamp}: {message}\n")
+@app.on_event("startup")
+async def startup_event():
+    create_tables(database_name)
 
 
 @app.post("/api/report")
-def report(report: Report):
-    rig_name = report.server_name
-    gpus = json.dumps(report.gpus) if report.gpus else ''
-
-    hashrate = 0
-    power = 0
-
-    try:
-        hashrate = int(report.hashrate_mh)
-    except (ValueError, TypeError):
-        hashrate = 0
-
-    try:
-        power = int(report.power_w)
-    except (ValueError, TypeError):
-        power = 0
-
-    if not rig_name:
-        log_transaction("Invalid report: Missing rig name")
-        raise HTTPException(status_code=400, detail="Rig name is required")
-
-    create_rig_table()
-    conn = sqlite3.connect(DATABASE_PATH)
-    c = conn.cursor()
-    c.execute(
-        """
-        INSERT INTO rig (name, gpus, hashrate_mh, power_w, created_at)
-        VALUES (?, ?, ?, ?, ?)
-        """,
-        (rig_name, gpus, hashrate, power, datetime.now()),
-    )
-    conn.commit()
-    conn.close()
-
-    log_transaction("Data received")
-
+async def report(report: Report):
+    insert_report(report, database_name)
     return {"message": "Data received"}
 
 
 @app.get("/api/report")
-def get_report():
-    conn = sqlite3.connect(DATABASE_PATH)
-    c = conn.cursor()
-    c.execute("SELECT * FROM rig")
-    rows = c.fetchall()
-    conn.close()
+async def fetch_report():
+    return get_reports(database_name)
 
-    return rows
+
+@app.post("/api/balance")
+async def submit_balance(balance: Balance):
+    timestamp = datetime.utcnow().isoformat() + 'Z'
+
+    insert_balance(balance.total_tokens, timestamp, database_name)
+
+    return {"message": "Balance submitted"}
+
+
+@app.post("/api/balance_with_timestamp")
+async def submit_balance_with_timestamp(balance: BalanceWithTimestamp):
+    insert_balance_with_timestamp(balance.total_tokens, balance.timestamp,
+                                  database_name)
+
+    return {"message": "Balance submitted with timestamp"}
+
+
+@app.get("/api/balance")
+async def get_latest_balance():
+    balance_data = get_balance(database_name)
+
+    return {"balance": balance_data["balance"],
+            "timestamp": balance_data["timestamp"]}

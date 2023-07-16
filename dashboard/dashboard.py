@@ -31,8 +31,18 @@ response = requests.get(api_url)
 
 # Load data into DataFrame
 if response.status_code == 200:
+    # Load Rig data
     data = response.json()
-    if not data:
+    # Fetch balance data from the API
+    balance_api_url = api_url.replace('/api/report', '/api/balance')
+    balance_response = requests.get(balance_api_url)
+    if balance_response.status_code == 200:
+        balance_data = balance_response.json()
+        balance = balance_data['balance']
+    else:
+        balance = None  # or some default value
+
+    if not data and balance is None:
         # Display a message if no data
         st.error("No API data available.")
         st.stop()
@@ -52,11 +62,14 @@ def format_time_delta(delta):
     return humanize.naturaldelta(total_seconds)
 
 
-# Display total hashrate, total power, and total active rigs in three columns
-header1, header2, header3 = st.columns(3)
-header1.title("Hashrate")
-header2.title("Power")
-header3.title("Rigs")
+# # Display total hashrate, total power, total active rigs, and balance in four columns
+# header1, header2, header3, header4 = st.columns(4)
+# header1.title("Hashrate")
+# header2.title("Power")
+# header3.title("Rigs")
+# header4.title("Balance")
+
+
 
 # Select boxes for time_range and time_interval
 time_controls = st.columns(2)
@@ -82,11 +95,43 @@ latest_readings = df[df["created_at"] > cutoff_time].groupby('name').last()
 total_hashrate = latest_readings["hashrate_mh"].sum()
 total_power = latest_readings["power_w"].sum()
 total_rigs = latest_readings.shape[0]
+st_balance = "∅" if balance is None else f"{format(int(balance), ',')}"
 
-# Update total hashrate, total power, and total active rigs values
+
+headers = {
+    "Hashrate": total_hashrate,
+    "Power": total_power,
+    "Balance": st_balance
+}
+
+# Display total hashrate, total power, total active rigs, and balance in four columns
+# header1, header2, header3, header4 = st.columns(3)
+header1, header2, header4 = st.columns(3)
+header1.title("Hashrate")
+header2.title("Power")
+# header3.title("Rigs")
+header4.title("Balance")
+
+
+# Update total hashrate, total power, total active rigs, and balance values
 header1.header(f"{format(int(total_hashrate), ',')} MH")
 header2.header(f"{format(int(total_power), ',')} W")
-header3.header(f"{total_rigs} ({time_range})")
+# header3.header(f"{total_rigs} ({time_range})")
+header4.header(f"{st_balance} ABEL")
+
+# Check if balance is None before converting to integer
+# if balance is not None:
+#     str_balance = f"{format(int(balance), ',')} ABEL"
+# else:
+#     str_balance = "N/A"
+
+
+# header1, header2, header3, header4 = st.columns(4)
+# header1.metric(label="Hashrate", value=f"{format(int(total_hashrate))} MH")
+# header2.metric(label="Power", value=f"{format(int(total_power))} Watt")
+# header3.metric(label="Rigs", value=f"{total_rigs} {time_range}")
+# header4.metric(label="Balance", value=f"{str_balance} ABEL")
+
 
 # Save selected time range and interval back to config
 config["prev_time_range"] = time_range
@@ -169,6 +214,6 @@ for i, rig in enumerate(unique_rigs):
         # Set the GPUs column as the index to remove ordinal numbers
         gpu_counts_df = gpu_counts_df.set_index("GPUs")
 
-        # Display the GPUs for the current rig in a table
-        column.subheader(f"{rig}")
+        # Display the rig name and the GPU counts DataFrame
+        column.markdown(f"### Rig {rig}")
         column.table(gpu_counts_df)

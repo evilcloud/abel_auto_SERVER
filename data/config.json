@@ -1,1 +1,1 @@
-{"api_url": "http://api:8000/api/report", "server_settings": {"database_name": "data.db", "logfile_name": "logfile.log"}, "dashboard_settings": {"data_intervals": ["1h", "6h", "12h", "1d", "3d", "1w", "1m", "all"]}, "prev_time_range": "1d", "prev_time_interval": "1h"}
+{"api_url": "http://api:8000/api/report", "server_settings": {"database_name": "data.db", "logfile_name": "logfile.log"}, "dashboard_settings": {"data_intervals": ["1h", "6h", "12h", "1d", "3d", "1w", "1m", "all"]}, "prev_time_range": "1h", "prev_time_interval": "1h"}

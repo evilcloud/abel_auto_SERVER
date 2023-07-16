@@ -5,6 +5,7 @@ import json
 import humanize
 import time
 from datetime import datetime, timedelta
+from collections import Counter
 
 
 # Function to convert time intervals to hours
@@ -181,13 +182,12 @@ else:
     st.subheader("No rigs data available.")
 
 st.markdown("---")
-
 # ...
 
 # Display GPU information for each unique rig
 st.subheader("Rigs GPU Information")
 
-unique_rigs = df["name"].unique()
+unique_rigs = sorted(df["name"].unique())  # Sorted list of unique rig names
 
 # Create a set of columns
 columns = st.columns(3)
@@ -206,10 +206,9 @@ for i, rig in enumerate(unique_rigs):
             try:
                 # Convert the JSON string representation of the list into an actual list
                 gpus_list = json.loads(gpus_str)
-                for gpu in gpus_list:
-                    gpu_counts[gpu] = gpu_counts.get(gpu, 0) + 1
+                gpu_counts = Counter(gpus_list)  # use Counter to get the counts
             except Exception as e:
-                print(f"Error: {e}, gpus_str: {gpus_str}")
+                print(f"Error: {str(e)}, gpus_str: {gpus_str}")
 
         # Convert GPU counts into a DataFrame
         gpu_counts_df = pd.DataFrame(gpu_counts.items(), columns=["GPUs", "Count"])
